@@ -2,7 +2,7 @@ from typing import Any, Dict, List, Optional
 
 
 LOW_CONFIDENCE_THRESHOLD = 0.4
-DEFAULT_FRONT_THRESHOLD = 80
+DEFAULT_FRONT_BAND_PX = 80
 
 
 def _to_dict(obj: Any) -> Dict[str, Any]:
@@ -38,7 +38,8 @@ def _find_slot_for_bbox(
 
 def _get_line_y_at_x(points_xy: List[List[float]], x: float) -> Optional[float]:
     """
-    두 점으로 이루어진 앞턱 기준선에서 x 위치의 y값 계산.
+    points_xy 두 점으로 이루어진 앞턱 윗선에서
+    특정 x 위치의 y값을 계산한다.
     """
 
     if not points_xy or len(points_xy) < 2:
@@ -54,60 +55,96 @@ def _get_line_y_at_x(points_xy: List[List[float]], x: float) -> Optional[float]:
     return float(y1 + ratio * (y2 - y1))
 
 
-def _get_front_y_for_row(
+def _get_front_edge_for_row(
     row_no: int,
-    center_x: float,
     front_edge_points: List[Any],
-) -> Optional[float]:
-    """
-    row_no에 맞는 front_y를 찾는다.
-    """
-
+) -> Optional[Dict[str, Any]]:
     for edge in front_edge_points:
         edge_dict = _to_dict(edge)
 
-        if edge_dict.get("row_no") != row_no:
-            continue
-
-        if edge_dict.get("points_xy"):
-            return _get_line_y_at_x(edge_dict["points_xy"], center_x)
-
-        if edge_dict.get("front_y") is not None:
-            return float(edge_dict["front_y"])
-
-        if edge_dict.get("polygon"):
-            ys = [point[1] for point in edge_dict["polygon"]]
-            return float(max(ys))
+        if edge_dict.get("row_no") == row_no:
+            return edge_dict
 
     return None
 
 
-def _decide_depth_position(
+def _get_front_y_for_bbox(
     bbox: Dict[str, int],
     row_no: int,
     front_edge_points: List[Any],
-) -> str:
-    """
-    bbox와 앞턱 좌표를 비교해서 FRONT / BACK / UNKNOWN 판단.
+) -> Optional[float]:
+    edge = _get_front_edge_for_row(
+        row_no=row_no,
+        front_edge_points=front_edge_points,
+    )
 
-    기준:
-    - bbox bottom_y가 front_y 근처면 FRONT
-    - front_y보다 위쪽이면 BACK
-    """
+    if edge is None:
+        return None
 
     center_x = bbox["x"] + bbox["width"] / 2
-    bottom_y = bbox["y"] + bbox["height"]
 
-    front_y = _get_front_y_for_row(
+    if edge.get("points_xy"):
+        return _get_line_y_at_x(edge["points_xy"], center_x)
+
+    if edge.get("front_y") is not None:
+        return float(edge["front_y"])
+
+    if edge.get("polygon"):
+        # 윗선 기준이므로 polygon의 가장 위쪽 y 사용
+        ys = [point[1] for point in edge["polygon"]]
+        return float(min(ys))
+
+    return None
+
+
+def _get_front_band_px(
+    row_no: int,
+    front_edge_points: List[Any],
+) -> int:
+    edge = _get_front_edge_for_row(
         row_no=row_no,
-        center_x=center_x,
+        front_edge_points=front_edge_points,
+    )
+
+    if edge is None:
+        return DEFAULT_FRONT_BAND_PX
+
+    return int(edge.get("front_band_px") or DEFAULT_FRONT_BAND_PX)
+
+
+def _decide_depth_position(
+    bbox: Dict[str, int],
+    row_no: Optional[int],
+    front_edge_points: List[Any],
+) -> str:
+    """
+    FRONT/BACK 판단.
+
+    기준:
+    - 상품 bbox의 bottom_y가 앞턱 윗선 y - front_band_px 이상이면 FRONT
+    - 그보다 위에 있으면 BACK
+    """
+
+    if row_no is None:
+        return "UNKNOWN"
+
+    front_y = _get_front_y_for_bbox(
+        bbox=bbox,
+        row_no=int(row_no),
         front_edge_points=front_edge_points,
     )
 
     if front_y is None:
         return "UNKNOWN"
 
-    if bottom_y >= front_y - DEFAULT_FRONT_THRESHOLD:
+    front_band_px = _get_front_band_px(
+        row_no=int(row_no),
+        front_edge_points=front_edge_points,
+    )
+
+    bottom_y = bbox["y"] + bbox["height"]
+
+    if bottom_y >= front_y - front_band_px:
         return "FRONT"
 
     return "BACK"
@@ -153,15 +190,14 @@ def map_detections_to_slots(
 
         depth_position = _decide_depth_position(
             bbox=bbox,
-            row_no=int(slot["row_no"]),
+            row_no=slot.get("row_no"),
             front_edge_points=front_edge_points,
         )
 
         mapped.append(
             {
-                "slot_id": slot["slot_id"],
+                "slot_id": int(slot["slot_id"]),
                 "product_id": det["product_id"],
-                "sku_code": det.get("sku_code"),
                 "class_name": det.get("class_name"),
                 "x": bbox["x"],
                 "y": bbox["y"],

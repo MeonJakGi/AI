@@ -11,29 +11,30 @@ def _to_dict(obj: Any) -> Dict[str, Any]:
 def decide_stock_status(
     front_quantity: int,
     min_front_quantity: int,
-    inventory_quantity: int,
+    total_quantity: int,
+    reorder_point: int,
     has_misplaced: bool,
     has_low_confidence: bool,
     has_unknown_depth: bool,
 ) -> str:
     """
-    stock.status 판단.
-
-    ENOUGH:
-    - 앞줄 수량 충분
-
-    NEED_REFILL:
-    - 앞줄 부족
-    - 창고 재고 있음
-
-    ORDER_NEEDED:
-    - 앞줄 부족
-    - 창고 재고 없음
+    Entity 기준 stock.status 판단.
 
     NEED_CHECK:
     - 오진열
     - 저신뢰
-    - depth UNKNOWN
+    - FRONT/BACK 판단 불가
+
+    ENOUGH:
+    - 앞줄 수량 충분
+
+    ORDER_NEEDED:
+    - 앞줄 부족
+    - total_quantity <= reorder_point
+
+    NEED_REFILL:
+    - 앞줄 부족
+    - total_quantity > reorder_point
     """
 
     if has_misplaced or has_low_confidence or has_unknown_depth:
@@ -42,10 +43,10 @@ def decide_stock_status(
     if front_quantity >= min_front_quantity:
         return "ENOUGH"
 
-    if inventory_quantity > 0:
-        return "NEED_REFILL"
+    if total_quantity <= reorder_point:
+        return "ORDER_NEEDED"
 
-    return "ORDER_NEEDED"
+    return "NEED_REFILL"
 
 
 def _build_status_reason(status: str) -> str:
@@ -55,11 +56,11 @@ def _build_status_reason(status: str) -> str:
     if status == "ENOUGH":
         return "FRONT_QUANTITY_ENOUGH"
 
-    if status == "NEED_REFILL":
-        return "FRONT_QUANTITY_UNDER_MIN_FRONT_QUANTITY_AND_INVENTORY_EXISTS"
-
     if status == "ORDER_NEEDED":
-        return "FRONT_QUANTITY_UNDER_MIN_FRONT_QUANTITY_AND_INVENTORY_EMPTY"
+        return "FRONT_QUANTITY_UNDER_AND_TOTAL_QUANTITY_UNDER_ROP"
+
+    if status == "NEED_REFILL":
+        return "FRONT_QUANTITY_UNDER_AND_TOTAL_QUANTITY_OVER_ROP"
 
     return "UNKNOWN_REASON"
 
@@ -78,7 +79,7 @@ def analyze_stock_results(
         if det["slot_id"] is None:
             continue
 
-        detections_by_slot[det["slot_id"]].append(det)
+        detections_by_slot[int(det["slot_id"])].append(det)
 
     stock_results: List[Dict[str, Any]] = []
 
@@ -120,39 +121,36 @@ def analyze_stock_results(
         if slot_detections:
             confidence = round(
                 sum(det["confidence"] for det in slot_detections) / len(slot_detections),
-                4,
+                2,
             )
         else:
-            confidence = 0.0
+            confidence = 0.00
 
-        inventory_quantity = int(slot_dict["inventory_quantity"])
+        total_quantity = int(slot_dict["total_quantity"])
         reorder_point = int(slot_dict["reorder_point"])
         min_front_quantity = int(slot_dict["min_front_quantity"])
 
         status = decide_stock_status(
             front_quantity=front_quantity,
             min_front_quantity=min_front_quantity,
-            inventory_quantity=inventory_quantity,
+            total_quantity=total_quantity,
+            reorder_point=reorder_point,
             has_misplaced=has_misplaced,
             has_low_confidence=has_low_confidence,
             has_unknown_depth=has_unknown_depth,
         )
 
-        total_quantity = inventory_quantity + detected_quantity
-        order_list_needed = total_quantity <= reorder_point
-
         stock_results.append(
             {
                 "slot_id": slot_id,
                 "product_id": expected_product_id,
-                "sku_code": slot_dict.get("sku_code"),
                 "status": status,
+                "is_misplaced": has_misplaced,
                 "front_quantity": front_quantity,
                 "back_quantity": back_quantity,
                 "detected_quantity": detected_quantity,
                 "confidence": confidence,
                 "status_reason": _build_status_reason(status),
-                "order_list_needed": order_list_needed,
             }
         )
 

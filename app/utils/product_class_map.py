@@ -71,7 +71,7 @@ CLASS_NAMES = {
 
 CLASS_ID_TO_PRODUCT = {
     class_id: {
-        # 백엔드가 리스트 번호를 product_id로 쓴다는 전제
+        # 백엔드 Product.product_id가 YOLO class_id와 같다는 전제
         "product_id": class_id,
         "product_name": product_name,
     }

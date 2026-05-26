@@ -16,7 +16,7 @@ IMAGE_SIZE = 1280
 
 
 if not MODEL_PATH.exists():
-    raise FileNotFoundError(f"YOLO 모델 파일을 찾을 수 없습니다: {MODEL_PATH}")
+    raise FileNotFoundError(f"상품 탐지 YOLO 모델 파일을 찾을 수 없습니다: {MODEL_PATH}")
 
 
 model = YOLO(str(MODEL_PATH))
@@ -24,7 +24,7 @@ model = YOLO(str(MODEL_PATH))
 
 def run_product_detection(image: Image.Image) -> List[Dict[str, Any]]:
     """
-    YOLO 상품 탐지 실행.
+    상품 YOLO 탐지 실행.
 
     반환 bbox는 원본 이미지 픽셀 기준:
     x, y, width, height
@@ -61,10 +61,9 @@ def run_product_detection(image: Image.Image) -> List[Dict[str, Any]]:
             detections.append(
                 {
                     "product_id": int(product["product_id"]),
-                    "sku_code": product.get("sku_code"),
                     "class_name": product.get("product_name"),
                     "class_id": class_id,
-                    "confidence": round(confidence, 4),
+                    "confidence": round(confidence, 2),
                     "bbox": {
                         "x": int(round(x1)),
                         "y": int(round(y1)),
