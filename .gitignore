@@ -5,9 +5,19 @@ __pycache__/
 .env
 .venv/
 venv/
+.myvenv/
+myvenv
 
 runs/
 logs/
 
 weights/*.pt
 models/*.pt
+myvenv/
+
+# Debug outputs
+debug_outputs/
+test_images/
+*.png
+*.jpg
+*.jpeg
