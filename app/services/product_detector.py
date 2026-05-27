@@ -60,9 +60,9 @@ def run_product_detection(image: Image.Image) -> List[Dict[str, Any]]:
 
             detections.append(
                 {
-                    "product_id": int(product["product_id"]),
-                    "class_name": product.get("product_name"),
+                    "product_id": None,
                     "class_id": class_id,
+                    "class_name": product.get("product_name"),
                     "confidence": round(confidence, 2),
                     "bbox": {
                         "x": int(round(x1)),
