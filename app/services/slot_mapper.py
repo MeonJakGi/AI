@@ -176,7 +176,8 @@ def map_detections_to_slots(
             mapped.append(
                 {
                     "slot_id": None,
-                    "product_id": det["product_id"],
+                    "product_id": det.get("product_id"),
+                    "class_id": det["class_id"],
                     "class_name": det.get("class_name"),
                     "x": bbox["x"],
                     "y": bbox["y"],
@@ -190,10 +191,10 @@ def map_detections_to_slots(
             )
             continue
 
-        expected_product_id = int(slot["product_id"])
-        detected_product_id = int(det["product_id"])
+        expected_class_id = int(slot["class_id"])
+        detected_class_id = int(det["class_id"])
 
-        is_misplaced = detected_product_id != expected_product_id
+        is_misplaced = detected_class_id != expected_class_id
 
         depth_position = _decide_depth_position(
             bbox=bbox,
@@ -204,7 +205,8 @@ def map_detections_to_slots(
         mapped.append(
             {
                 "slot_id": int(slot["slot_id"]),
-                "product_id": det["product_id"],
+                "product_id": det.get("product_id"),
+                "class_id": det["class_id"],
                 "class_name": det.get("class_name"),
                 "x": bbox["x"],
                 "y": bbox["y"],

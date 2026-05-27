@@ -29,8 +29,8 @@ class SlotInput(BaseModel):
     row_no: Optional[int] = None
     col_no: Optional[int] = None
 
-    # 백엔드가 말한 리스트 번호 기준이라면 product_id = YOLO class_id
-    product_id: int
+    product_id: Optional[int] = None  # DB 상품 ID, 저장/표시용
+    class_id: int                     # YOLO class_id, 판단용
     product_name: Optional[str] = None
 
     expected_quantity: int
@@ -59,7 +59,8 @@ class AnalyzeShelfRequest(BaseModel):
 
 class DetectionResponse(BaseModel):
     slot_id: Optional[int]
-    product_id: int
+    product_id: Optional[int] = None
+    class_id: int
     class_name: Optional[str] = None
 
     x: int
@@ -75,7 +76,8 @@ class DetectionResponse(BaseModel):
 
 class StockResultResponse(BaseModel):
     slot_id: int
-    product_id: int
+    product_id: Optional[int] = None
+    class_id: int
 
     status: str
     is_misplaced: bool

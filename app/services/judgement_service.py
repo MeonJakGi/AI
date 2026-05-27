@@ -116,10 +116,13 @@ def analyze_stock_results(
 
         slot_id = int(slot_dict["slot_id"])
 
-        # DB Product PK
+        # Product.product_id = 상품 PK, 결과 반환/DB 연결용
         expected_product_id = int(slot_dict["product_id"])
 
-        # YOLO class id
+        # Product.class_id = YOLO class_id, 탐지 결과 비교/판단용
+        expected_class_id = int(slot_dict["class_id"])
+
+        # YOLO class_id: 판단/비교용
         expected_class_id = int(slot_dict["class_id"])
 
         slot_detections = detections_by_slot.get(slot_id, [])
@@ -128,7 +131,8 @@ def analyze_stock_results(
         expected_product_detections = [
             det
             for det in slot_detections
-            if int(det["class_id"]) == expected_class_id
+            if det.get("class_id") is not None
+            and int(det["class_id"]) == expected_class_id
         ]
 
         front_quantity = sum(
