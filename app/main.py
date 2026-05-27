@@ -13,7 +13,7 @@ from app.services.visualizer import draw_analysis_result, draw_front_edge_only
 app = FastAPI(title="Be:show AI Server")
 
 
-@app.post("/ai/analyze-shelf", response_model=AnalyzeShelfResponse)
+@app.post("/api/beshow/analysis", response_model=AnalyzeShelfResponse)
 def analyze_shelf(request: AnalyzeShelfRequest):
     image = load_image(request.image_url)
 
