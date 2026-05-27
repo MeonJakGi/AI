@@ -4,6 +4,8 @@ from typing import Any, Dict, List, Optional
 LOW_CONFIDENCE_THRESHOLD = 0.4
 DEFAULT_FRONT_BAND_PX = 80
 
+SLOT_PADDING_X = 30
+SLOT_PADDING_Y = 10
 
 def _to_dict(obj: Any) -> Dict[str, Any]:
     if hasattr(obj, "model_dump"):
@@ -25,10 +27,15 @@ def _find_slot_for_bbox(
     for slot in slots:
         slot_dict = _to_dict(slot)
 
-        x1 = slot_dict["x"]
-        y1 = slot_dict["y"]
-        x2 = x1 + slot_dict["width"]
-        y2 = y1 + slot_dict["height"]
+        # x1 = slot_dict["x"]
+        # y1 = slot_dict["y"]
+        # x2 = x1 + slot_dict["width"]
+        # y2 = y1 + slot_dict["height"]
+
+        x1 = slot_dict["x"] - SLOT_PADDING_X
+        y1 = slot_dict["y"] - SLOT_PADDING_Y
+        x2 = slot_dict["x"] + slot_dict["width"] + SLOT_PADDING_X
+        y2 = slot_dict["y"] + slot_dict["height"] + SLOT_PADDING_Y
 
         if x1 <= bottom_center_x <= x2 and y1 <= bottom_center_y <= y2:
             return slot_dict

@@ -1,4 +1,6 @@
 from fastapi import FastAPI, HTTPException
+from fastapi.responses import FileResponse
+from pathlib import Path
 
 from app.schemas import AnalyzeShelfRequest, AnalyzeShelfResponse
 from app.services.image_loader import load_image
@@ -6,7 +8,7 @@ from app.services.product_detector import run_product_detection
 from app.services.shelf_lip_detector import detect_front_edge_points
 from app.services.slot_mapper import map_detections_to_slots
 from app.services.judgement_service import analyze_stock_results
-
+from app.services.visualizer import draw_analysis_result, draw_front_edge_only
 
 app = FastAPI(title="Be:show AI Server")
 
@@ -49,6 +51,20 @@ def analyze_shelf(request: AnalyzeShelfRequest):
         front_edge_points=front_edge_points,
     )
 
+    # debug_image_path = draw_analysis_result(
+    # image=image,
+    # front_edge_points=front_edge_points,
+    # slots=request.slots,
+    # detections=mapped_detections,
+    # shelf_image_id=request.shelf_image_id,
+    # )
+
+    debug_image_path = draw_front_edge_only(
+    image=image,
+    front_edge_points=front_edge_points,
+    shelf_image_id=request.shelf_image_id,
+    )
+
     stock_results = analyze_stock_results(
         mapped_detections=mapped_detections,
         slots=request.slots,
@@ -71,6 +87,7 @@ def analyze_shelf(request: AnalyzeShelfRequest):
         ),
         "front_edge_source": front_edge_source,
         "front_edge_count": len(front_edge_points),
+        "debug_image_path": debug_image_path
     }
 
     return AnalyzeShelfResponse(
@@ -79,4 +96,36 @@ def analyze_shelf(request: AnalyzeShelfRequest):
         detections=mapped_detections,
         stock_results=stock_results,
         summary=summary,
+    )
+
+@app.get("/ai/debug-image/{shelf_image_id}")
+def get_debug_image(shelf_image_id: int):
+    image_path = Path("debug_outputs") / f"analyze_{shelf_image_id}.png"
+
+    if not image_path.exists():
+        raise HTTPException(
+            status_code=404,
+            detail="디버그 이미지를 찾을 수 없습니다."
+        )
+
+    return FileResponse(
+        path=image_path,
+        media_type="image/png",
+        filename=f"analyze_{shelf_image_id}.png",
+    )
+
+@app.get("/ai/debug-front-edge/{shelf_image_id}")
+def get_debug_front_edge_image(shelf_image_id: int):
+    image_path = Path("debug_outputs") / f"front_edge_only_{shelf_image_id}.png"
+
+    if not image_path.exists():
+        raise HTTPException(
+            status_code=404,
+            detail="앞턱 디버그 이미지를 찾을 수 없습니다."
+        )
+
+    return FileResponse(
+        path=image_path,
+        media_type="image/png",
+        filename=f"front_edge_only_{shelf_image_id}.png",
     )
