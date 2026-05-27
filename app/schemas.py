@@ -16,6 +16,12 @@ class FrontEdgePoint(BaseModel):
     angle: Optional[float] = None
     width_ratio: Optional[float] = None
 
+class BBoxResponse(BaseModel):
+    x: int
+    y: int
+    width: int
+    height: int
+
 
 class SlotInput(BaseModel):
     slot_id: int
@@ -88,6 +94,15 @@ class StockResultResponse(BaseModel):
 
     confidence: float
     status_reason: str
+
+    # 보충/확인/발주 리스트에서 crop할 대표 좌표
+    issue_bbox: Optional[BBoxResponse] = None
+
+    # SLOT / MISPLACED_DETECTION / LOW_CONFIDENCE_DETECTION / UNKNOWN_DEPTH_DETECTION / DETECTION
+    bbox_source: Optional[str] = None
+
+    # 확인 필요일 때, 문제가 된 탐지 상품의 confidence
+    issue_confidence: Optional[float] = None
 
 
 class AnalyzeShelfResponse(BaseModel):
