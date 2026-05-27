@@ -71,8 +71,7 @@ CLASS_NAMES = {
 
 CLASS_ID_TO_PRODUCT = {
     class_id: {
-        # 백엔드 Product.product_id가 YOLO class_id와 같다는 전제
-        "product_id": class_id,
+        "class_id": class_id,
         "product_name": product_name,
     }
     for class_id, product_name in CLASS_NAMES.items()
