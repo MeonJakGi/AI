@@ -17,6 +17,65 @@ def _get_min_front_quantity(slot_dict: Dict[str, Any]) -> int:
     expected_quantity = int(slot_dict.get("expected_quantity", 0))
     return max(expected_quantity // 2, 1)
 
+def _make_slot_bbox(slot_dict: Dict[str, Any]) -> Dict[str, int]:
+    """
+    slot 좌표를 crop용 bbox로 변환.
+    NEED_REFILL처럼 탐지 bbox가 없는 경우 사용.
+    """
+    return {
+        "x": int(round(float(slot_dict["x"]))),
+        "y": int(round(float(slot_dict["y"]))),
+        "width": int(round(float(slot_dict["width"]))),
+        "height": int(round(float(slot_dict["height"]))),
+    }
+
+
+def _make_detection_bbox(det: Dict[str, Any]) -> Dict[str, int]:
+    """
+    detection 좌표를 crop용 bbox로 변환.
+    현재 slot_mapper.py에서 x, y, width, height를 이미 넘기고 있으므로 이 값을 사용.
+    """
+    return {
+        "x": int(round(float(det["x"]))),
+        "y": int(round(float(det["y"]))),
+        "width": int(round(float(det["width"]))),
+        "height": int(round(float(det["height"]))),
+    }
+
+
+def _select_issue_bbox_for_need_check(slot_detections: List[Dict[str, Any]]):
+    for det in slot_detections:
+        if det.get("is_misplaced", False):
+            return (
+                _make_detection_bbox(det),
+                "MISPLACED_DETECTION",
+                round(float(det["confidence"]), 2),
+            )
+
+    for det in slot_detections:
+        if det.get("is_low_confidence", False):
+            return (
+                _make_detection_bbox(det),
+                "LOW_CONFIDENCE_DETECTION",
+                round(float(det["confidence"]), 2),
+            )
+
+    for det in slot_detections:
+        if det.get("depth_position") == "UNKNOWN":
+            return (
+                _make_detection_bbox(det),
+                "UNKNOWN_DEPTH_DETECTION",
+                round(float(det["confidence"]), 2),
+            )
+
+    for det in slot_detections:
+        return (
+            _make_detection_bbox(det),
+            "DETECTION",
+            round(float(det["confidence"]), 2),
+        )
+
+    return None, None, None
 
 def decide_stock_status(
     front_quantity: int,
@@ -122,9 +181,6 @@ def analyze_stock_results(
         # Product.class_id = YOLO class_id, 탐지 결과 비교/판단용
         expected_class_id = int(slot_dict["class_id"])
 
-        # YOLO class_id: 판단/비교용
-        expected_class_id = int(slot_dict["class_id"])
-
         slot_detections = detections_by_slot.get(slot_id, [])
 
         # 해당 slot에서 기대 상품 class_id와 같은 탐지만 정상 수량으로 계산
@@ -197,6 +253,32 @@ def analyze_stock_results(
             has_unknown_depth=has_unknown_depth,
         )
 
+        slot_bbox = _make_slot_bbox(slot_dict)
+
+        issue_bbox = None
+        bbox_source = None
+        issue_confidence = None
+
+        if status == "NEED_CHECK":
+            issue_bbox, bbox_source, issue_confidence = _select_issue_bbox_for_need_check(
+                slot_detections
+            )
+
+            if issue_bbox is None:
+                issue_bbox = slot_bbox
+                bbox_source = "SLOT"
+                issue_confidence = None
+
+        elif status == "NEED_REFILL":
+            issue_bbox = slot_bbox
+            bbox_source = "SLOT"
+            issue_confidence = None
+
+        elif status == "ORDER_NEEDED":
+            issue_bbox = slot_bbox
+            bbox_source = "SLOT"
+            issue_confidence = None
+
         stock_results.append(
             {
                 "slot_id": slot_id,
@@ -209,6 +291,10 @@ def analyze_stock_results(
                 "detected_quantity": detected_quantity,
                 "confidence": confidence,
                 "status_reason": status_reason,
+                "issue_bbox": issue_bbox,
+                "bbox_source": bbox_source,
+                "issue_confidence": issue_confidence,
+
             }
         )
 
