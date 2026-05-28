@@ -1556,7 +1556,7 @@ def detect_front_edge_points(image: Image.Image) -> List[Dict[str, Any]]:
     front_edge_points: List[Dict[str, Any]] = []
 
     for idx, line in enumerate(lines, start=1):
-        front_band_px = max(60, int(h * 0.04))
+        front_band_px = max(40, int(h * 0.018))
 
         front_edge_points.append(
             {

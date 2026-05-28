@@ -51,19 +51,19 @@ def analyze_shelf(request: AnalyzeShelfRequest):
         front_edge_points=front_edge_points,
     )
 
-    # debug_image_path = draw_analysis_result(
-    # image=image,
-    # front_edge_points=front_edge_points,
-    # slots=request.slots,
-    # detections=mapped_detections,
-    # shelf_image_id=request.shelf_image_id,
-    # )
-
-    debug_image_path = draw_front_edge_only(
+    debug_image_path = draw_analysis_result(
     image=image,
     front_edge_points=front_edge_points,
+    slots=request.slots,
+    detections=mapped_detections,
     shelf_image_id=request.shelf_image_id,
     )
+
+    # debug_image_path = draw_front_edge_only(
+    # image=image,
+    # front_edge_points=front_edge_points,
+    # shelf_image_id=request.shelf_image_id,
+    # )
 
     stock_results = analyze_stock_results(
         mapped_detections=mapped_detections,
