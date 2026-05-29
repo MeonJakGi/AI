@@ -219,3 +219,124 @@ def draw_front_edge_only(
     debug_image.save(output_path)
 
     return str(output_path)
+
+def draw_auto_slots_result(
+    image: Image.Image,
+    detections: List[Dict[str, Any]],
+    slots: List[Any],
+    front_edge_points: List[Any],
+    shelf_image_id: int,
+) -> str:
+    """
+    자동 생성된 slot 후보를 시각화해서 저장한다.
+
+    표시 내용:
+    - 상품 detection bbox
+    - 자동 생성 slot bbox
+    - slot_id / class_id / row_no / col_no
+    """
+
+    debug_image = image.copy().convert("RGB")
+    draw = ImageDraw.Draw(debug_image)
+    font = _get_font(18)
+
+        # 0. 앞턱 윗선 그리기
+    for edge in front_edge_points:
+        edge_dict = _to_dict(edge)
+
+        points_xy = edge_dict.get("points_xy")
+        row_no = edge_dict.get("row_no")
+
+        if not points_xy or len(points_xy) < 2:
+            continue
+
+        p1 = tuple(map(int, points_xy[0]))
+        p2 = tuple(map(int, points_xy[1]))
+
+        draw.line(
+            [p1, p2],
+            fill="red",
+            width=6,
+        )
+
+        draw.text(
+            (p1[0], max(0, p1[1] - 28)),
+            f"FRONT EDGE row {row_no}",
+            fill="red",
+            font=font,
+        )
+
+    # 1. 상품 detection bbox 그리기
+    for det in detections:
+        bbox = det.get("bbox")
+
+        if bbox is None:
+            continue
+
+        x1 = int(bbox["x"])
+        y1 = int(bbox["y"])
+        x2 = x1 + int(bbox["width"])
+        y2 = y1 + int(bbox["height"])
+
+        class_id = det.get("class_id")
+        class_name = det.get("class_name", "")
+        confidence = det.get("confidence")
+
+        draw.rectangle(
+            [x1, y1, x2, y2],
+            outline="lime",
+            width=2,
+        )
+
+        auto_row_no = det.get("auto_row_no")
+
+        if confidence is not None:
+            label = f"class:{class_id} row:{auto_row_no} {class_name} {float(confidence):.2f}"
+        else:
+            label = f"class:{class_id} row:{auto_row_no} {class_name}"
+
+        draw.text(
+            (x1 + 3, max(0, y1 - 18)),
+            label,
+            fill="lime",
+            font=font,
+        )
+
+    # 2. 자동 생성 slot bbox 그리기
+    for slot in slots:
+        slot_dict = _to_dict(slot)
+
+        x1 = int(slot_dict["x"])
+        y1 = int(slot_dict["y"])
+        x2 = int(slot_dict["x"] + slot_dict["width"])
+        y2 = int(slot_dict["y"] + slot_dict["height"])
+
+        slot_id = slot_dict.get("slot_id")
+        class_id = slot_dict.get("class_id")
+        row_no = slot_dict.get("row_no")
+        col_no = slot_dict.get("col_no")
+
+        draw.rectangle(
+            [x1, y1, x2, y2],
+            outline="cyan",
+            width=5,
+        )
+
+        label = f"AUTO SLOT {slot_id} | class:{class_id} | row:{row_no} col:{col_no}"
+
+        draw.rectangle(
+            [x1, max(0, y1 - 28), x1 + 560, y1],
+            fill="cyan",
+        )
+
+        draw.text(
+            (x1 + 5, max(0, y1 - 24)),
+            label,
+            fill="black",
+            font=font,
+        )
+
+    output_path = DEBUG_DIR / f"auto_slots_{shelf_image_id}.png"
+    debug_image.save(output_path)
+
+    return str(output_path)

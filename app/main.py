@@ -1,6 +1,7 @@
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse
 from pathlib import Path
+from fastapi.staticfiles import StaticFiles
 
 from app.schemas import AnalyzeShelfRequest, AnalyzeShelfResponse
 from app.services.image_loader import load_image
@@ -8,10 +9,15 @@ from app.services.product_detector import run_product_detection
 from app.services.shelf_lip_detector import detect_front_edge_points
 from app.services.slot_mapper import map_detections_to_slots
 from app.services.judgement_service import analyze_stock_results
-from app.services.visualizer import draw_analysis_result, draw_front_edge_only
+from app.services.visualizer import draw_analysis_result, draw_front_edge_only, draw_auto_slots_result
+from app.services.slot_generator import generate_slots_from_detections, filter_detections_for_slot_generation
 
 app = FastAPI(title="Be:show AI Server")
-
+app.mount(
+    "/test_images",
+    StaticFiles(directory="test_images"),
+    name="test_images",
+)
 
 @app.post("/api/beshow/analysis", response_model=AnalyzeShelfResponse)
 def analyze_shelf(request: AnalyzeShelfRequest):
@@ -45,16 +51,44 @@ def analyze_shelf(request: AnalyzeShelfRequest):
 
     detections = run_product_detection(image)
 
+    slots = request.slots or []
+    slot_source = "REQUEST"
+
+    # auto slot 시각화에 사용할 detection
+    # 기본은 원본 detection
+    slot_debug_detections = detections
+
+    if not slots:
+        # slot 생성/시각화용 detection은 중복 제거된 버전을 사용
+        slot_debug_detections = filter_detections_for_slot_generation(detections)
+
+        slots = generate_slots_from_detections(
+            detections=slot_debug_detections,
+            front_edge_points=front_edge_points,
+        )
+        slot_source = "AI_GENERATED"
+
+    auto_slot_debug_image_path = None
+
+    if slot_source == "AI_GENERATED":
+        auto_slot_debug_image_path = draw_auto_slots_result(
+            image=image,
+            detections=slot_debug_detections,
+            slots=slots,
+            front_edge_points=front_edge_points,
+            shelf_image_id=request.shelf_image_id,
+        )
+
     mapped_detections = map_detections_to_slots(
         detections=detections,
-        slots=request.slots,
+        slots=slots,
         front_edge_points=front_edge_points,
     )
 
     debug_image_path = draw_analysis_result(
     image=image,
     front_edge_points=front_edge_points,
-    slots=request.slots,
+    slots=slots,
     detections=mapped_detections,
     shelf_image_id=request.shelf_image_id,
     )
@@ -67,7 +101,7 @@ def analyze_shelf(request: AnalyzeShelfRequest):
 
     stock_results = analyze_stock_results(
         mapped_detections=mapped_detections,
-        slots=request.slots,
+        slots=slots,
     )
 
     summary = {
@@ -87,7 +121,10 @@ def analyze_shelf(request: AnalyzeShelfRequest):
         ),
         "front_edge_source": front_edge_source,
         "front_edge_count": len(front_edge_points),
-        "debug_image_path": debug_image_path
+        "debug_image_path": debug_image_path,
+        "slot_source": slot_source,
+        "slot_count": len(slots),
+        "auto_slot_debug_image_path": auto_slot_debug_image_path,
     }
 
     return AnalyzeShelfResponse(
@@ -128,4 +165,21 @@ def get_debug_front_edge_image(shelf_image_id: int):
         path=image_path,
         media_type="image/png",
         filename=f"front_edge_only_{shelf_image_id}.png",
+    )
+
+
+@app.get("/ai/debug-auto-slots/{shelf_image_id}")
+def get_debug_auto_slots_image(shelf_image_id: int):
+    image_path = Path("debug_outputs") / f"auto_slots_{shelf_image_id}.png"
+
+    if not image_path.exists():
+        raise HTTPException(
+            status_code=404,
+            detail="자동 slot 디버그 이미지를 찾을 수 없습니다."
+        )
+
+    return FileResponse(
+        path=image_path,
+        media_type="image/png",
+        filename=f"auto_slots_{shelf_image_id}.png",
     )

@@ -10,7 +10,7 @@ from app.utils.product_class_map import get_product_by_class_id
 BASE_DIR = Path(__file__).resolve().parents[2]
 MODEL_PATH = BASE_DIR / "weights" / "best.pt"
 
-CONF_THRESHOLD = 0.25
+CONF_THRESHOLD = 0.10
 NMS_IOU_THRESHOLD = 0.55
 IMAGE_SIZE = 1280
 
