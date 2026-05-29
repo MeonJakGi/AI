@@ -176,7 +176,8 @@ def analyze_stock_results(
         slot_id = int(slot_dict["slot_id"])
 
         # Product.product_id = 상품 PK, 결과 반환/DB 연결용
-        expected_product_id = int(slot_dict["product_id"])
+        raw_product_id = slot_dict.get("product_id")
+        expected_product_id = int(raw_product_id) if raw_product_id is not None else None
 
         # Product.class_id = YOLO class_id, 탐지 결과 비교/판단용
         expected_class_id = int(slot_dict["class_id"])

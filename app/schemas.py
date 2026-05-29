@@ -60,8 +60,8 @@ class AnalyzeShelfRequest(BaseModel):
     # null이면 AI 서버가 shelf_lip_best.pt로 앞턱 윗선 추출
     front_edge_points: Optional[List[FrontEdgePoint]] = None
 
-    slots: List[SlotInput]
-
+    # slots: List[SlotInput]
+    slots: Optional[List[SlotInput]] = None
 
 class DetectionResponse(BaseModel):
     slot_id: Optional[int]
