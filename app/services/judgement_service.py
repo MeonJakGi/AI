@@ -3,9 +3,15 @@ from typing import Any, Dict, List, Tuple
 
 
 def _to_dict(obj: Any) -> Dict[str, Any]:
+    if isinstance(obj, dict):
+        return obj
+
     if hasattr(obj, "model_dump"):
         return obj.model_dump()
-    return dict(obj)
+
+    raise TypeError(
+        f"_to_dict() expected dict or Pydantic model, got {type(obj).__name__}: {obj}"
+    )
 
 
 def _get_min_front_quantity(slot_dict: Dict[str, Any]) -> int:

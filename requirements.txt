@@ -7,3 +7,6 @@ numpy
 opencv-python
 ultralytics
 python-multipart
+pymysql
+python-dotenv
+requests

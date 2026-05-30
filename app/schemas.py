@@ -49,19 +49,20 @@ class SlotInput(BaseModel):
 
 
 class AnalyzeShelfRequest(BaseModel):
-    shelf_image_id: int
     shelf_id: int
-    store_id: int
+    shelf_image_id: int
+    # shelf_id: int
+    # store_id: int 
 
     image_url: str
-    image_width: Optional[int] = None
-    image_height: Optional[int] = None
+    # image_width: Optional[int] = None
+    # image_height: Optional[int] = None
 
     # null이면 AI 서버가 shelf_lip_best.pt로 앞턱 윗선 추출
-    front_edge_points: Optional[List[FrontEdgePoint]] = None
+    #front_edge_points: Optional[List[FrontEdgePoint]] = None
 
     # slots: List[SlotInput]
-    slots: Optional[List[SlotInput]] = None
+    # slots: Optional[List[SlotInput]] = None
 
 class DetectionResponse(BaseModel):
     slot_id: Optional[int]
