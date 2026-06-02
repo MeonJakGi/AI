@@ -15,11 +15,11 @@ from app.services.visualizer import draw_analysis_result
 from app.services.backend_client import post_analysis_completed
 
 app = FastAPI(title="Be:show AI Server")
-app.mount(
-    "/test_images",
-    StaticFiles(directory="test_images"),
-    name="test_images",
-)
+# app.mount(
+#     "/test_images",
+#     StaticFiles(directory="test_images"),
+#     name="test_images",
+# )
 
 
 def _safe_mark_failed(repo: AnalysisRepository, shelf_image_id: int, message: str) -> None:
