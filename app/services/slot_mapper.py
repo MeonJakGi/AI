@@ -14,8 +14,8 @@ FRONT_PERPENDICULAR_TOLERANCE_MAX_PX = 60
 FRONT_ADAPTIVE_TOLERANCE_RATIO = 0.45
 FRONT_ADAPTIVE_TOLERANCE_MAX_PX = 80
 FRONT_ADAPTIVE_ANGLE_CUTOFF_DEG = 5.0
-FRONT_DEPTH_SCORE_THRESHOLD = 0.50
-FRONT_ABSOLUTE_MIN_SCORE = 0.50
+FRONT_DEPTH_SCORE_THRESHOLD = 0.65
+FRONT_ABSOLUTE_MIN_SCORE = 0.65
 FRONT_GROUP_MARGIN_SCORE = 0.08
 
 
@@ -72,7 +72,7 @@ def _get_depth_point_ratio_for_bbox(bbox: Dict[str, int]) -> float:
 
     # 왕뚜껑/햇반/컵라면처럼 낮고 넓은 상품
     if aspect_ratio <= FLAT_ITEM_ASPECT_RATIO:
-        return 1.0
+        return 0.93
 
     # 칸쵸/포카칩/일반 봉지류
     return 0.93

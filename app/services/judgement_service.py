@@ -48,6 +48,93 @@ def _make_detection_bbox(det: Dict[str, Any]) -> Dict[str, int]:
         "height": int(round(float(det["height"]))),
     }
 
+BACK_COVERED_X_OVERLAP_RATIO = 0.35
+BACK_COVERED_CENTER_TOLERANCE_RATIO = 0.65
+BACK_COVERED_CENTER_TOLERANCE_MAX_PX = 70
+
+
+def _center_x(det: Dict[str, Any]) -> float:
+    return float(det["x"] + det["width"] / 2)
+
+
+def _x_overlap_ratio(a: Dict[str, Any], b: Dict[str, Any]) -> float:
+    ax1 = float(a["x"])
+    ax2 = float(a["x"] + a["width"])
+    bx1 = float(b["x"])
+    bx2 = float(b["x"] + b["width"])
+
+    overlap = max(0.0, min(ax2, bx2) - max(ax1, bx1))
+    base = max(1.0, min(float(a["width"]), float(b["width"])))
+
+    return overlap / base
+
+
+def _is_back_covered_by_front(
+    back_det: Dict[str, Any],
+    front_det: Dict[str, Any],
+) -> bool:
+    """
+    BACK 상품이 FRONT 상품과 같은 열에 있으면,
+    FRONT 상품 뒤에 가려진 것으로 보고
+    매대 추정 수량 계산에서 BACK 상품을 별도로 더하지 않는다.
+    """
+
+    overlap_ratio = _x_overlap_ratio(back_det, front_det)
+
+    if overlap_ratio >= BACK_COVERED_X_OVERLAP_RATIO:
+        return True
+
+    center_distance = abs(_center_x(back_det) - _center_x(front_det))
+
+    min_width = max(
+        1.0,
+        min(float(back_det["width"]), float(front_det["width"])),
+    )
+
+    center_tolerance = min(
+        min_width * BACK_COVERED_CENTER_TOLERANCE_RATIO,
+        BACK_COVERED_CENTER_TOLERANCE_MAX_PX,
+    )
+
+    return center_distance <= center_tolerance
+
+
+def _count_uncovered_back_quantity(
+    expected_product_detections: List[Dict[str, Any]],
+) -> int:
+    """
+    BACK 상품 중 앞에 같은 열 FRONT 상품이 없는 것만 센다.
+
+    - FRONT 상품 1개는 뒤에 가려진 상품까지 포함해 2개로 추정
+    - BACK 상품은 앞에 같은 열 FRONT 상품이 없을 때만 1개로 추정
+    """
+
+    front_detections = [
+        det for det in expected_product_detections
+        if det.get("depth_position") == "FRONT"
+    ]
+
+    back_detections = [
+        det for det in expected_product_detections
+        if det.get("depth_position") == "BACK"
+    ]
+
+    uncovered_back_count = 0
+
+    for back_det in back_detections:
+        covered_by_front = any(
+            _is_back_covered_by_front(
+                back_det=back_det,
+                front_det=front_det,
+            )
+            for front_det in front_detections
+        )
+
+        if not covered_by_front:
+            uncovered_back_count += 1
+
+    return uncovered_back_count
+
 
 def _select_issue_bbox_for_need_check(slot_detections: List[Dict[str, Any]]):
     for det in slot_detections:
@@ -112,11 +199,13 @@ def analyze_stock_results(
     Stock = 매대 진열 상태
 
     창고 재고 계산:
-    warehouse_quantity
-    = Inventory.total_quantity - 현재 이미지에서 탐지된 해당 상품의 매대 수량
+    estimated_shelf_quantity = front_quantity * 2 + uncovered_back_quantity
 
-    단, 여기서 뒤에 숨은 재고를 추정하지 않음.
-    AI가 실제로 탐지한 수량만 사용함.
+    - FRONT 상품은 뒤쪽 상품을 가린다고 보고 2개로 추정
+    - BACK 상품은 앞에 같은 열 FRONT 상품이 없을 때만 1개로 추정
+
+    warehouse_quantity
+    = Inventory.total_quantity - estimated_shelf_quantity
     """
 
     detections_by_slot = defaultdict(list)
@@ -127,17 +216,17 @@ def analyze_stock_results(
 
         detections_by_slot[int(det["slot_id"])].append(det)
 
-    # class_id별 현재 매대 탐지 수량 합계
-    # slot_id가 null이어도 이미지 안에서 탐지된 상품이면 포함
-    shelf_detected_quantity_by_class = defaultdict(int)
+    # # class_id별 현재 매대 탐지 수량 합계
+    # # slot_id가 null이어도 이미지 안에서 탐지된 상품이면 포함
+    # shelf_detected_quantity_by_class = defaultdict(int)
 
-    for det in mapped_detections:
-        class_id = det.get("class_id")
+    # for det in mapped_detections:
+    #     class_id = det.get("class_id")
 
-        if class_id is None:
-            continue
+    #     if class_id is None:
+    #         continue
 
-        shelf_detected_quantity_by_class[int(class_id)] += 1
+    #     shelf_detected_quantity_by_class[int(class_id)] += 1
 
     stock_results: List[Dict[str, Any]] = []
 
@@ -204,15 +293,19 @@ def analyze_stock_results(
         total_quantity = int(slot_dict["total_quantity"])
         min_front_quantity = _get_min_front_quantity(slot_dict)
 
-        # 해당 상품이 현재 매대 전체에서 탐지된 수량
-        shelf_detected_quantity = shelf_detected_quantity_by_class.get(
-            expected_class_id,
-            0,
+        # BACK 상품 중 앞에 같은 열 FRONT 상품이 없는 것만 계산
+        uncovered_back_quantity = _count_uncovered_back_quantity(
+            expected_product_detections
         )
 
-        # 창고 재고 = 전체 재고 - 매대에서 실제 탐지된 재고
+        # 매대 추정 수량
+        # FRONT 상품은 뒤쪽 상품을 가린다고 보고 2개로 계산
+        # BACK 상품은 앞에 같은 열 FRONT 상품이 없을 때만 1개로 계산
+        estimated_shelf_quantity = front_quantity * 2 + uncovered_back_quantity
+
+        # 창고 재고 = 전체 재고 - 매대 추정 수량
         warehouse_quantity = max(
-            total_quantity - shelf_detected_quantity,
+            total_quantity - estimated_shelf_quantity,
             0,
         )
 
