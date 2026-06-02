@@ -58,29 +58,6 @@ def _select_issue_bbox_for_need_check(slot_detections: List[Dict[str, Any]]):
                 round(float(det["confidence"]), 2),
             )
 
-    for det in slot_detections:
-        if det.get("is_low_confidence", False):
-            return (
-                _make_detection_bbox(det),
-                "LOW_CONFIDENCE_DETECTION",
-                round(float(det["confidence"]), 2),
-            )
-
-    for det in slot_detections:
-        if det.get("depth_position") == "UNKNOWN":
-            return (
-                _make_detection_bbox(det),
-                "UNKNOWN_DEPTH_DETECTION",
-                round(float(det["confidence"]), 2),
-            )
-
-    for det in slot_detections:
-        return (
-            _make_detection_bbox(det),
-            "DETECTION",
-            round(float(det["confidence"]), 2),
-        )
-
     return None, None, None
 
 def decide_stock_status(
@@ -88,48 +65,36 @@ def decide_stock_status(
     min_front_quantity: int,
     warehouse_quantity: int,
     has_misplaced: bool,
-    has_low_confidence: bool,
-    has_unknown_depth: bool,
 ) -> Tuple[str, str]:
     """
     Stock.status 판단 로직.
 
     기준:
-    1. 오진열 / 저신뢰 / FRONT-BACK 판단 불가
+    1. 오진열
        → NEED_CHECK
 
-    2. 앞열이 충분한지 1차 판단
+    2. 앞열이 충분함
        front_quantity >= min_front_quantity
        → ENOUGH
 
-    3. 앞열이 충분하지 않으면 2차 판단
-       창고 재고 있음
+    3. 앞열이 부족하지만 창고에 채워넣을 재고가 있음
+       warehouse_quantity > 0
        → NEED_REFILL
 
-       창고 재고 없음
+    4. 앞열이 부족하지만 창고에 채워넣을 재고가 없음
+       warehouse_quantity <= 0
        → ORDER_NEEDED
 
     주의:
-    - ORDER_NEEDED는 보충 필요 리스트에 띄우는 대상이 아님.
-    - 보충 필요 리스트는 NEED_REFILL, NEED_CHECK만 표시.
-    - 발주 필요 리스트는 Inventory.total_quantity <= reorder_point 기준으로
-      백엔드가 별도로 조회.
+    - 발주 필요 리스트는 여기서 판단하지 않는다.
     """
 
     if has_misplaced:
         return "NEED_CHECK", "MISPLACED_PRODUCT"
 
-    if has_low_confidence:
-        return "NEED_CHECK", "LOW_CONFIDENCE_DETECTION"
-
-    if has_unknown_depth:
-        return "NEED_CHECK", "DEPTH_POSITION_UNKNOWN"
-
-    # 1차: 앞열 충분 여부 판단
     if front_quantity >= min_front_quantity:
         return "ENOUGH", "FRONT_QUANTITY_ENOUGH"
 
-    # 2차: 충분하지 않으면 창고 재고 기준으로 판단
     if warehouse_quantity > 0:
         return "NEED_REFILL", "FRONT_UNDER_AND_WAREHOUSE_STOCK_EXISTS"
 
@@ -217,15 +182,15 @@ def analyze_stock_results(
             for det in slot_detections
         )
 
-        has_low_confidence = any(
-            det.get("is_low_confidence", False)
-            for det in slot_detections
-        )
+        # has_low_confidence = any(
+        #     det.get("is_low_confidence", False)
+        #     for det in slot_detections
+        # )
 
-        has_unknown_depth = any(
-            det.get("depth_position") == "UNKNOWN"
-            for det in slot_detections
-        )
+        # has_unknown_depth = any(
+        #     det.get("depth_position") == "UNKNOWN"
+        #     for det in slot_detections
+        # )
 
         if slot_detections:
             confidence = round(
@@ -256,8 +221,8 @@ def analyze_stock_results(
             min_front_quantity=min_front_quantity,
             warehouse_quantity=warehouse_quantity,
             has_misplaced=has_misplaced,
-            has_low_confidence=has_low_confidence,
-            has_unknown_depth=has_unknown_depth,
+            # has_low_confidence=has_low_confidence,
+            # has_unknown_depth=has_unknown_depth,
         )
 
         slot_bbox = _make_slot_bbox(slot_dict)
