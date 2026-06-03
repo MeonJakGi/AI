@@ -494,6 +494,7 @@ class AnalysisRepository:
                             front_quantity,
                             back_quantity,
                             detected_quantity,
+                            estimated_shelf_quantity,
                             confidence,
                             status_reason,
                             issue_x,
@@ -503,7 +504,7 @@ class AnalysisRepository:
                             bbox_source,
                             is_current,
                             changed_at
-                        ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, TRUE, NOW())
+                        ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, TRUE, NOW())
                         """,
                         (
                             shelf_image_id,
@@ -514,6 +515,7 @@ class AnalysisRepository:
                             int(item.get("front_quantity", 0)),
                             int(item.get("back_quantity", 0)),
                             int(item.get("detected_quantity", 0)),
+                            int(item.get("estimated_shelf_quantity", 0)),
                             round(float(item.get("confidence", 0.0)), 2),
                             item.get("status_reason"),
                             issue_bbox.get("x"),
