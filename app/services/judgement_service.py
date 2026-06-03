@@ -354,6 +354,7 @@ def analyze_stock_results(
                 "front_quantity": front_quantity,
                 "back_quantity": back_quantity,
                 "detected_quantity": detected_quantity,
+                "estimated_shelf_quantity": estimated_shelf_quantity,
                 "confidence": confidence,
                 "status_reason": status_reason,
                 "issue_bbox": issue_bbox,

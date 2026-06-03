@@ -92,6 +92,7 @@ class StockResultResponse(BaseModel):
     front_quantity: int
     back_quantity: int
     detected_quantity: int
+    estimated_shelf_quantity: int
 
     confidence: float
     status_reason: str
