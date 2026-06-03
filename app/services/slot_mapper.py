@@ -42,6 +42,12 @@ STACK_PROMOTABLE_MAX_HEIGHT_PX = 95
 STACK_PROMOTABLE_MIN_ASPECT_RATIO = 0.8
 STACK_PROMOTABLE_MAX_ASPECT_RATIO = 3.5
 
+SIDE_COLUMN_X_GAP_PX = 35
+SIDE_COLUMN_MIN_ITEMS = 2
+SIDE_COLUMN_MIN_FRONT_ITEMS = 1
+SIDE_COLUMN_MAX_WIDTH_RATIO = 1.8
+SIDE_COLUMN_MIN_HEIGHT_PX = 35
+SIDE_COLUMN_MAX_HEIGHT_PX = 130
 
 def _to_dict(obj: Any) -> Dict[str, Any]:
     if isinstance(obj, dict):
@@ -725,6 +731,109 @@ def _is_vertical_stack_pair(
     return True
 
 
+def _is_side_column_stack_candidate(det: Dict[str, Any]) -> bool:
+    """
+    측면 이미지에서 세로 stack 보정 후보인지 판단한다.
+    특정 class_id를 보지 않고 bbox 형태만 본다.
+    """
+    width = max(float(det["width"]), 1.0)
+    height = max(float(det["height"]), 1.0)
+
+    if height < SIDE_COLUMN_MIN_HEIGHT_PX:
+        return False
+
+    if height > SIDE_COLUMN_MAX_HEIGHT_PX:
+        return False
+
+    # 너무 가로로 길쭉한 박스는 column stack 후보에서 제외
+    if width / height > SIDE_COLUMN_MAX_WIDTH_RATIO:
+        return False
+
+    return True
+
+
+def _promote_side_vertical_column_items(
+    mapped: List[Dict[str, Any]],
+) -> List[Dict[str, Any]]:
+    """
+    측면 이미지용 일반화 stack-column 보정.
+
+    목적:
+    - 통조림처럼 같은 slot/class 안에서 세로로 쌓인 상품이 있을 때,
+      같은 column의 일부만 FRONT로 잡히고 위쪽 상품이 BACK으로 남는 문제 보정.
+
+    방식:
+    - 특정 상품명/class_id를 보지 않는다.
+    - 같은 slot + 같은 class 안에서 x 중심이 비슷한 상품끼리 column으로 묶는다.
+    - column 안에 FRONT가 하나 이상 있으면, 같은 column의 상품을 FRONT로 승격한다.
+    """
+
+    groups: Dict[tuple, List[Dict[str, Any]]] = {}
+
+    for det in mapped:
+        slot_id = det.get("slot_id")
+        class_id = det.get("class_id")
+
+        if slot_id is None or class_id is None:
+            continue
+
+        if not _is_side_column_stack_candidate(det):
+            continue
+
+        key = (int(slot_id), int(class_id))
+        groups.setdefault(key, []).append(det)
+
+    for _, dets in groups.items():
+        if len(dets) < SIDE_COLUMN_MIN_ITEMS:
+            continue
+
+        sorted_dets = sorted(
+            dets,
+            key=lambda det: float(det["x"] + det["width"] / 2)
+        )
+
+        columns: List[List[Dict[str, Any]]] = []
+
+        for det in sorted_dets:
+            cx = float(det["x"] + det["width"] / 2)
+
+            placed = False
+
+            for column in columns:
+                column_cxs = [
+                    float(item["x"] + item["width"] / 2)
+                    for item in column
+                ]
+                column_mean_cx = sum(column_cxs) / len(column_cxs)
+
+                if abs(cx - column_mean_cx) <= SIDE_COLUMN_X_GAP_PX:
+                    column.append(det)
+                    placed = True
+                    break
+
+            if not placed:
+                columns.append([det])
+
+        for column in columns:
+            if len(column) < SIDE_COLUMN_MIN_ITEMS:
+                continue
+
+            front_count = sum(
+                1
+                for item in column
+                if item.get("depth_position") == "FRONT"
+            )
+
+            if front_count < SIDE_COLUMN_MIN_FRONT_ITEMS:
+                continue
+
+            # 같은 세로 column 안에 FRONT가 있으면 같은 앞줄 stack으로 본다.
+            for item in column:
+                item["depth_position"] = "FRONT"
+                item["side_vertical_column_promoted"] = True
+
+    return mapped
+
 def _promote_stacked_front_items(
     mapped: List[Dict[str, Any]],
 ) -> List[Dict[str, Any]]:
@@ -916,7 +1025,6 @@ def map_detections_to_slots(
     mapped = _refine_depth_by_slot_and_class(mapped)
 
     is_front_view = _is_front_view_by_front_edges(front_edge_points)
-
     if is_front_view:
         mapped = _refine_front_view_depth_by_bottom_row(
             mapped=mapped,
@@ -924,6 +1032,29 @@ def map_detections_to_slots(
         )
     else:
         mapped = _promote_stacked_front_items(mapped)
- 
+
+        # 측면에서만 일반화된 세로 column stack 보정 적용
+        mapped = _promote_side_vertical_column_items(mapped)
+    
+     # =========================
+    # DEBUG: 고추참치 FRONT/BACK 개수 확인
+    # slot_id 607 = can_side_03
+    # class_id 24 = 동원)고추참치
+    # =========================
+    tuna_front_count = 0
+    tuna_back_count = 0
+    tuna_unknown_count = 0
+    tuna_total_count = 0
+
+    for item in mapped:
+        if item.get("slot_id") == 607 and int(item.get("class_id", -1)) == 24:
+            tuna_total_count += 1
+
+            if item.get("depth_position") == "FRONT":
+                tuna_front_count += 1
+            elif item.get("depth_position") == "BACK":
+                tuna_back_count += 1
+            else:
+                tuna_unknown_count += 1
 
     return mapped
